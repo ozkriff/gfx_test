@@ -1,0 +1,11 @@
+[package]
+name = "gfx_test"
+version = "0.1.0"
+authors = ["Andrey Lesnikov <ozkriff@gmail.com>"]
+
+[dependencies]
+glutin = "^0.5.2"
+gfx_core = "*"
+gfx_device_gl = "*"
+gfx_window_glutin = "*"
+gfx = "*"
