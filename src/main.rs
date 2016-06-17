@@ -43,7 +43,7 @@ fn main() {
         }
         encoder.clear(&data.out, clear_color);
         encoder.flush(&mut device);
-        window.swap_buffers().expect("TEST TEST TEST");
+        window.swap_buffers().unwrap();
         device.cleanup();
     }
 }
