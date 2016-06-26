@@ -80,8 +80,8 @@ fn main() {
     let (t, test_texture) = load_texture(&mut factory, &include_bytes!("test.png")[..]);
     {
         let info = gfx::tex::ImageInfoCommon {
-            xoffset: 0,
-            yoffset: 0,
+            xoffset: 10,
+            yoffset: 10,
             zoffset: 0,
             width: 10,
             height: 10,
@@ -90,7 +90,7 @@ fn main() {
             mipmap: 0,
         };
         let data: &[[u8; 4]] = &[[255, 0, 0, 255]; 100];
-        encoder.update_texture::<gfx::format::R8_G8_B8_A8, (gfx::format::R8_G8_B8_A8, gfx::format::Uint)>(&t, None, info, data).unwrap();
+        encoder.update_texture::<gfx::format::R8_G8_B8_A8, (gfx::format::R8_G8_B8_A8, gfx::format::Unorm)>(&t, None, info, data).unwrap();
     }
     let sampler = factory.create_sampler_linear();
     let data = pipe::Data {
