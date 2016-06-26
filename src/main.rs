@@ -10,7 +10,7 @@ extern crate image;
 use std::io::Cursor;
 use glutin::{Event, VirtualKeyCode, GlRequest};
 use gfx::traits::FactoryExt;
-use gfx::handle::{ShaderResourceView};
+use gfx::handle::{Texture, ShaderResourceView};
 use gfx::Device;
 
 pub type ColorFormat = gfx::format::Rgba8;
@@ -30,15 +30,14 @@ gfx_defines! {
     }
 }
 
-fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> ShaderResourceView<R, [f32; 4]>
+fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> (Texture<R, gfx::format::R8_G8_B8_A8>, ShaderResourceView<R, [f32; 4]>)
     where R: gfx::Resources, F: gfx::Factory<R>
 {
     use gfx::tex;
     let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = tex::Kind::D2(width as tex::Size, height as tex::Size, tex::AaMode::Single);
-    let (_, view) = factory.create_texture_const_u8::<ColorFormat>(kind, &[&img]).unwrap();
-    view
+    factory.create_texture_const_u8::<ColorFormat>(kind, &[&img]).unwrap()
 }
 
 fn main() {
@@ -78,7 +77,21 @@ fn main() {
         Vertex { pos: [  0.5,  0.5 ], color: [1.0, 0.0, 1.0], uv: [1.0, 0.0] },
     ];
     let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(vertex_data, index_data);
-    let test_texture = load_texture(&mut factory, &include_bytes!("test.png")[..]);
+    let (t, test_texture) = load_texture(&mut factory, &include_bytes!("test.png")[..]);
+    {
+        let info = gfx::tex::ImageInfoCommon {
+            xoffset: 0,
+            yoffset: 0,
+            zoffset: 0,
+            width: 10,
+            height: 10,
+            depth: 0,
+            format: (),
+            mipmap: 0,
+        };
+        let data: &[[u8; 4]] = &[[255, 0, 0, 255]; 100];
+        encoder.update_texture::<gfx::format::R8_G8_B8_A8, (gfx::format::R8_G8_B8_A8, gfx::format::Uint)>(&t, None, info, data).unwrap();
+    }
     let sampler = factory.create_sampler_linear();
     let data = pipe::Data {
         vbuf: vertex_buffer,
