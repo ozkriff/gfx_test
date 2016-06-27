@@ -8,7 +8,7 @@ extern crate glutin;
 extern crate image;
 
 use std::io::Cursor;
-use glutin::{Event, VirtualKeyCode, GlRequest};
+use glutin::{Api, Event, VirtualKeyCode, GlRequest};
 use gfx::traits::FactoryExt;
 use gfx::handle::{ShaderResourceView};
 use gfx::Device;
@@ -54,22 +54,19 @@ fn main() {
     let (window, mut device, mut factory, main_color, _main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
     let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
-    let pso = match window.get_api() {
-        glutin::Api::OpenGl => {
-            factory.create_pipeline_simple(
-                include_bytes!("shader/triangle_120.glslv"),
-                include_bytes!("shader/triangle_120.glslf"),
-                pipe::new(),
-            )
-        }
-        glutin::Api::OpenGlEs | glutin::Api::WebGl => {
-            factory.create_pipeline_simple(
-                include_bytes!("shader/triangle_100_es.glslv"),
-                include_bytes!("shader/triangle_100_es.glslf"),
-                pipe::new(),
-            )
-        }
-    }.unwrap();
+    let shader_header = match window.get_api() {
+        Api::OpenGl => include_bytes!("shader/pre_gl.glsl").to_vec(),
+        Api::OpenGlEs | Api::WebGl => include_bytes!("shader/pre_gles.glsl").to_vec(),
+    };
+    let mut vertex_shader = shader_header.clone();
+    vertex_shader.extend_from_slice(include_bytes!("shader/v.glsl"));
+    let mut fragment_shader = shader_header;
+    fragment_shader.extend_from_slice(include_bytes!("shader/f.glsl"));
+    let pso = factory.create_pipeline_simple(
+        &vertex_shader,
+        &fragment_shader,
+        pipe::new(),
+    ).unwrap();
     let index_data: &[u16] = &[0,  1,  2,  1,  2,  3];
     let vertex_data = &[
         Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0], uv: [0.0, 1.0] },

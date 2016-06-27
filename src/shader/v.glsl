@@ -1,5 +1,3 @@
-#version 120
-
 attribute vec2 a_Pos;
 attribute vec2 a_Uv;
 attribute vec3 a_Color;
