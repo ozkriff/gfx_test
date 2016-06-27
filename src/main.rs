@@ -71,10 +71,10 @@ fn main() {
     }.unwrap();
     let index_data: &[u16] = &[0,  1,  2,  1,  2,  3];
     let vertex_data = &[
-        Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0], uv: [0.0, 1.0] },
-        Vertex { pos: [ -0.5,  0.5 ], color: [0.0, 1.0, 0.0], uv: [0.0, 0.0] },
-        Vertex { pos: [  0.5, -0.5 ], color: [0.0, 0.0, 1.0], uv: [1.0, 1.0] },
-        Vertex { pos: [  0.5,  0.5 ], color: [1.0, 0.0, 1.0], uv: [1.0, 0.0] },
+        Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 1.0, 1.0], uv: [0.0, 1.0] },
+        Vertex { pos: [ -0.5,  0.5 ], color: [1.0, 1.0, 1.0], uv: [0.0, 0.0] },
+        Vertex { pos: [  0.5, -0.5 ], color: [1.0, 1.0, 1.0], uv: [1.0, 1.0] },
+        Vertex { pos: [  0.5,  0.5 ], color: [1.0, 1.0, 1.0], uv: [1.0, 0.0] },
     ];
     let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(vertex_data, index_data);
     let (t, test_texture) = load_texture(&mut factory, &include_bytes!("test.png")[..]);
