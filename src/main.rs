@@ -10,11 +10,13 @@ extern crate image;
 use std::io::Cursor;
 use glutin::{Api, Event, VirtualKeyCode, GlRequest};
 use gfx::traits::FactoryExt;
-use gfx::handle::{ShaderResourceView};
+use gfx::handle::{Texture, ShaderResourceView};
 use gfx::Device;
 
 pub type ColorFormat = gfx::format::Srgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
+pub type SurfaceFormat = gfx::format::R8_G8_B8_A8;
+pub type FullFormat = (SurfaceFormat, gfx::format::Unorm);
 
 gfx_defines! {
     vertex Vertex {
@@ -29,15 +31,37 @@ gfx_defines! {
     }
 }
 
-fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> ShaderResourceView<R, [f32; 4]>
+fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> (Texture<R, SurfaceFormat>, ShaderResourceView<R, [f32; 4]>)
     where R: gfx::Resources, F: gfx::Factory<R>
 {
     use gfx::tex;
     let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = tex::Kind::D2(width as tex::Size, height as tex::Size, tex::AaMode::Single);
-    let (_, view) = factory.create_texture_const_u8::<ColorFormat>(kind, &[&img]).unwrap();
-    view
+    factory.create_texture_const_u8::<ColorFormat>(kind, &[&img]).unwrap()
+}
+
+fn update_texture<R, C>(
+    encoder: &mut gfx::Encoder<R, C>,
+    texture: &Texture<R, SurfaceFormat>,
+    offset: [u16; 2],
+    size: [u16; 2],
+    color: [u8; 4],
+)
+    where R: gfx::Resources, C: gfx::CommandBuffer<R>
+{
+    let info = gfx::tex::ImageInfoCommon {
+        xoffset: offset[0],
+        yoffset: offset[1],
+        zoffset: 0,
+        width: size[0],
+        height: size[1],
+        depth: 0,
+        format: (),
+        mipmap: 0,
+    };
+    let data = &vec![color; (size[0] * size[1]) as usize];
+    encoder.update_texture::<SurfaceFormat, FullFormat>(texture, None, info, data).unwrap();
 }
 
 fn main() {
@@ -74,11 +98,14 @@ fn main() {
         Vertex { pos: [  0.5,  0.5 ], uv: [1.0, 0.0] },
     ];
     let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(vertex_data, index_data);
-    let test_texture = load_texture(&mut factory, &include_bytes!("test.png")[..]);
+    let (test_texture, test_texture_view) = load_texture(&mut factory, &include_bytes!("test.png")[..]);
     let sampler = factory.create_sampler_linear();
+    update_texture(&mut encoder, &test_texture, [10, 10], [20, 20], [255, 0, 0, 255]);
+    update_texture(&mut encoder, &test_texture, [10, 30], [20, 20], [0, 255, 0, 255]);
+    update_texture(&mut encoder, &test_texture, [10, 50], [20, 20], [0, 0, 255, 255]);
     let data = pipe::Data {
         vbuf: vertex_buffer,
-        texture: (test_texture, sampler.clone()),
+        texture: (test_texture_view, sampler.clone()),
         out: main_color,
     };
     loop {
