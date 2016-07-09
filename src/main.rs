@@ -27,7 +27,7 @@ gfx_defines! {
     pipeline pipe {
         vbuf: gfx::VertexBuffer<Vertex> = (),
         texture: gfx::TextureSampler<[f32; 4]> = "t_Tex",
-        out: gfx::RenderTarget<ColorFormat> = "Target0",
+        out: gfx::BlendTarget<ColorFormat> = ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ALPHA),
     }
 }
 
