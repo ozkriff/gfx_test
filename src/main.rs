@@ -12,6 +12,7 @@ use glutin::{Api, Event, VirtualKeyCode, GlRequest};
 use gfx::traits::FactoryExt;
 use gfx::handle::{ShaderResourceView};
 use gfx::Device;
+use gfx::tex;
 
 pub type ColorFormat = gfx::format::Srgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
@@ -34,7 +35,6 @@ gfx_defines! {
 fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> ShaderResourceView<R, [f32; 4]>
     where R: gfx::Resources, F: gfx::Factory<R>
 {
-    use gfx::tex;
     let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = tex::Kind::D2(width as tex::Size, height as tex::Size, tex::AaMode::Single);
