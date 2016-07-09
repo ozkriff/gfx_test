@@ -42,6 +42,25 @@ fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> ShaderResourceView<R, [f3
     view
 }
 
+fn new_pso(
+    window: &glutin::Window,
+    factory: &mut gfx_device_gl::Factory,
+) -> gfx::PipelineState<gfx_device_gl::Resources, pipe::Meta> {
+    let shader_header = match window.get_api() {
+        Api::OpenGl => include_bytes!("shader/pre_gl.glsl").to_vec(),
+        Api::OpenGlEs | Api::WebGl => include_bytes!("shader/pre_gles.glsl").to_vec(),
+    };
+    let mut vertex_shader = shader_header.clone();
+    vertex_shader.extend_from_slice(include_bytes!("shader/v.glsl"));
+    let mut fragment_shader = shader_header;
+    fragment_shader.extend_from_slice(include_bytes!("shader/f.glsl"));
+    factory.create_pipeline_simple(
+        &vertex_shader,
+        &fragment_shader,
+        pipe::new(),
+    ).unwrap()
+}
+
 fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
     let mut clear_color = [0.0, 0.0, 1.0, 1.0];
@@ -55,19 +74,7 @@ fn main() {
     let (window, mut device, mut factory, main_color, _main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
     let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
-    let shader_header = match window.get_api() {
-        Api::OpenGl => include_bytes!("shader/pre_gl.glsl").to_vec(),
-        Api::OpenGlEs | Api::WebGl => include_bytes!("shader/pre_gles.glsl").to_vec(),
-    };
-    let mut vertex_shader = shader_header.clone();
-    vertex_shader.extend_from_slice(include_bytes!("shader/v.glsl"));
-    let mut fragment_shader = shader_header;
-    fragment_shader.extend_from_slice(include_bytes!("shader/f.glsl"));
-    let pso = factory.create_pipeline_simple(
-        &vertex_shader,
-        &fragment_shader,
-        pipe::new(),
-    ).unwrap();
+    let pso = new_pso(&window, &mut factory);
     let index_data: &[u16] = &[0,  1,  2,  1,  2,  3];
     let vertex_data = &[
         Vertex { pos: [ -0.5, -0.5 ], uv: [0.0, 1.0] },
