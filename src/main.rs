@@ -71,7 +71,7 @@ fn main() {
     let builder = glutin::WindowBuilder::new()
         .with_title("Triangle example".to_string())
         .with_gl(gl_version);
-    let (window, mut device, mut factory, main_color, _main_depth) =
+    let (window, mut device, mut factory, mut main_color, mut main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
     let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
     let pso = new_pso(&window, &mut factory);
@@ -85,16 +85,20 @@ fn main() {
     let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(vertex_data, index_data);
     let test_texture_view = load_texture(&mut factory, &include_bytes!("test.png")[..]);
     let sampler = factory.create_sampler_linear();
-    let data = pipe::Data {
-        vbuf: vertex_buffer,
-        texture: (test_texture_view, sampler.clone()),
-        out: main_color,
+    let mut data = pipe::Data {
+        vbuf: vertex_buffer.clone(),
+        texture: (test_texture_view.clone(), sampler.clone()),
+        out: main_color.clone(),
     };
     loop {
         for event in window.poll_events() {
             match event {
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) |
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) => return,
                 Event::Closed => return,
+                Event::Resized(..) => {
+                    gfx_window_glutin::update_views(&window, &mut main_color, &mut main_depth);
+                    data.out = main_color.clone();
+                },
                 Event::Touch(glutin::Touch{phase, ..}) => {
                     match phase {
                         glutin::TouchPhase::Moved => {
