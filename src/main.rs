@@ -3,14 +3,14 @@
 extern crate gfx;
 
 extern crate gfx_window_glutin;
-extern crate gfx_device_gl;
+extern crate gfx_device_gl as gfx_gl;
 extern crate glutin;
 extern crate image;
 
 use std::io::Cursor;
 use glutin::{Api, Event, VirtualKeyCode, GlRequest};
 use gfx::traits::FactoryExt;
-use gfx::handle::{ShaderResourceView};
+use gfx::handle::{RenderTargetView, DepthStencilView, ShaderResourceView};
 use gfx::Device;
 use gfx::tex;
 
@@ -44,8 +44,8 @@ fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> ShaderResourceView<R, [f3
 
 fn new_pso(
     window: &glutin::Window,
-    factory: &mut gfx_device_gl::Factory,
-) -> gfx::PipelineState<gfx_device_gl::Resources, pipe::Meta> {
+    factory: &mut gfx_gl::Factory,
+) -> gfx::PipelineState<gfx_gl::Resources, pipe::Meta> {
     let shader_header = match window.get_api() {
         Api::OpenGl => include_bytes!("shader/pre_gl.glsl").to_vec(),
         Api::OpenGlEs | Api::WebGl => include_bytes!("shader/pre_gles.glsl").to_vec(),
@@ -61,68 +61,146 @@ fn new_pso(
     ).unwrap()
 }
 
+// TODO: use typedefs
+// TODO: remove `#[allow(dead_code)]`
+struct Visualizer {
+    clear_color: [f32; 4],
+    window: glutin::Window,
+    device: gfx_gl::Device,
+    main_color: RenderTargetView<gfx_gl::Resources, (SurfaceFormat, gfx::format::Srgb)>,
+    main_depth: DepthStencilView<gfx_gl::Resources, (gfx::format::D24_S8, gfx::format::Unorm)>,
+    encoder: gfx::Encoder<gfx_gl::Resources, gfx_gl::CommandBuffer>,
+    pso: gfx::PipelineState<gfx_gl::Resources, pipe::Meta>,
+    data: pipe::Data<gfx_gl::Resources>,
+    is_running: bool,
+    slice: gfx::Slice<gfx_gl::Resources>,
+
+    #[allow(dead_code)]
+    vertex_buffer: gfx::handle::Buffer<gfx_gl::Resources, Vertex>,
+
+    #[allow(dead_code)]
+    test_texture_view: ShaderResourceView<gfx_gl::Resources, [f32; 4]>,
+
+    #[allow(dead_code)]
+    sampler: gfx::handle::Sampler<gfx_gl::Resources>,
+
+    #[allow(dead_code)]
+    factory: gfx_gl::Factory,
+}
+
+impl Visualizer {
+    fn new() -> Visualizer {
+        let gl_version = GlRequest::GlThenGles {
+            opengles_version: (2, 0),
+            opengl_version: (2, 1),
+        };
+        let builder = glutin::WindowBuilder::new()
+            .with_title("Triangle example".to_string())
+            .with_gl(gl_version);
+        let (window, device, mut factory, main_color, main_depth)
+            = gfx_window_glutin::init(builder);
+        let encoder = factory.create_command_buffer().into();
+        let index_data: &[u16] = &[0,  1,  2,  1,  2,  3];
+        let vertex_data = &[
+            Vertex { pos: [ -0.5, -0.5 ], uv: [0.0, 1.0] },
+            Vertex { pos: [ -0.5,  0.5 ], uv: [0.0, 0.0] },
+            Vertex { pos: [  0.5, -0.5 ], uv: [1.0, 1.0] },
+            Vertex { pos: [  0.5,  0.5 ], uv: [1.0, 0.0] },
+        ];
+        let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(vertex_data, index_data);
+        let pso = new_pso(&window, &mut factory);
+        let texture_data = &include_bytes!("test.png")[..];
+        let test_texture_view = load_texture(&mut factory, texture_data);
+        let sampler = factory.create_sampler_linear();
+        let data = pipe::Data {
+            vbuf: vertex_buffer.clone(),
+            texture: (test_texture_view.clone(), sampler.clone()),
+            out: main_color.clone(),
+        };
+        Visualizer {
+            clear_color: [0.0, 0.0, 1.0, 1.0],
+            window: window,
+            device: device,
+            factory: factory,
+            main_color: main_color,
+            main_depth: main_depth,
+            encoder: encoder,
+            pso: pso,
+            vertex_buffer: vertex_buffer,
+            slice: slice,
+            test_texture_view: test_texture_view,
+            sampler: sampler,
+            data: data,
+            is_running: true,
+        }
+    }
+
+    fn handle_event(&mut self, event: &glutin::Event) {
+        match *event {
+            Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) => {
+                self.is_running = false;
+            },
+            Event::Closed => {
+                self.is_running = false;
+            },
+            Event::Resized(..) => {
+                gfx_window_glutin::update_views(
+                    &self.window,
+                    &mut self.main_color,
+                    &mut self.main_depth,
+                );
+                self.data.out = self.main_color.clone();
+            },
+            Event::Touch(glutin::Touch{phase, ..}) => {
+                match phase {
+                    glutin::TouchPhase::Moved => {
+                        println!("MOVED");
+                    },
+                    glutin::TouchPhase::Started => {
+                        self.clear_color = [1.0, 0.0, 0.0, 1.0];
+                        println!("STARTED");
+                    },
+                    glutin::TouchPhase::Ended => {
+                        self.clear_color = [0.0, 1.0, 0.0, 1.0];
+                        println!("ENDED");
+                    },
+                    glutin::TouchPhase::Cancelled => unimplemented!(),
+                }
+            },
+            _ => {},
+        }
+    }
+
+    fn handle_events(&mut self) {
+        let events: Vec<_> = self.window.poll_events().collect();
+        for event in &events {
+            self.handle_event(event);
+        }
+    }
+
+    fn draw(&mut self) {
+        self.encoder.clear(&self.data.out, self.clear_color);
+        self.encoder.draw(&self.slice, &self.pso, &self.data);
+        self.encoder.flush(&mut self.device);
+        self.window.swap_buffers().unwrap();
+        self.device.cleanup();
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.is_running
+    }
+
+    fn tick(&mut self) {
+        self.handle_events();
+        self.draw();
+    }
+}
+
 fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
-    let mut clear_color = [0.0, 0.0, 1.0, 1.0];
-    let gl_version = GlRequest::GlThenGles {
-        opengles_version: (2, 0),
-        opengl_version: (2, 1),
-    };
-    let builder = glutin::WindowBuilder::new()
-        .with_title("Triangle example".to_string())
-        .with_gl(gl_version);
-    let (window, mut device, mut factory, mut main_color, mut main_depth) =
-        gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
-    let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
-    let pso = new_pso(&window, &mut factory);
-    let index_data: &[u16] = &[0,  1,  2,  1,  2,  3];
-    let vertex_data = &[
-        Vertex { pos: [ -0.5, -0.5 ], uv: [0.0, 1.0] },
-        Vertex { pos: [ -0.5,  0.5 ], uv: [0.0, 0.0] },
-        Vertex { pos: [  0.5, -0.5 ], uv: [1.0, 1.0] },
-        Vertex { pos: [  0.5,  0.5 ], uv: [1.0, 0.0] },
-    ];
-    let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(vertex_data, index_data);
-    let test_texture_view = load_texture(&mut factory, &include_bytes!("test.png")[..]);
-    let sampler = factory.create_sampler_linear();
-    let mut data = pipe::Data {
-        vbuf: vertex_buffer.clone(),
-        texture: (test_texture_view.clone(), sampler.clone()),
-        out: main_color.clone(),
-    };
-    loop {
-        for event in window.poll_events() {
-            match event {
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) => return,
-                Event::Closed => return,
-                Event::Resized(..) => {
-                    gfx_window_glutin::update_views(&window, &mut main_color, &mut main_depth);
-                    data.out = main_color.clone();
-                },
-                Event::Touch(glutin::Touch{phase, ..}) => {
-                    match phase {
-                        glutin::TouchPhase::Moved => {
-                            println!("MOVED");
-                        },
-                        glutin::TouchPhase::Started => {
-                            clear_color = [1.0, 0.0, 0.0, 1.0];
-                            println!("STARTED");
-                        },
-                        glutin::TouchPhase::Ended => {
-                            clear_color = [0.0, 1.0, 0.0, 1.0];
-                            println!("ENDED");
-                        },
-                        glutin::TouchPhase::Cancelled => unimplemented!(),
-                    }
-                },
-                _ => {},
-            }
-        }
-        encoder.clear(&data.out, clear_color);
-        encoder.draw(&slice, &pso, &data);
-        encoder.flush(&mut device);
-        window.swap_buffers().unwrap();
-        device.cleanup();
+    let mut visualizer = Visualizer::new();
+    while visualizer.is_running() {
+        visualizer.tick();
     }
 }
 
